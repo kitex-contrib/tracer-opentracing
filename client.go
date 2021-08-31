@@ -20,7 +20,8 @@ import (
 	"github.com/cloudwego/kitex/client"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/stats"
-	"github.com/cloudwego/kitex/pkg/utils"
+	"github.com/cloudwego/kitex/pkg/transmeta"
+	"github.com/cloudwego/kitex/transport"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -35,35 +36,55 @@ func (o *clientTracer) Start(ctx context.Context) context.Context {
 	if o.formOperationName != nil {
 		operationName = o.formOperationName(ctx)
 	}
-	_, ctx = opentracing.StartSpanFromContextWithTracer(ctx, o.tracer, operationName)
+	ri := rpcinfo.GetRPCInfo(ctx)
+	startTime := ri.Stats().GetEvent(stats.RPCStart).Time()
+	_, ctx = opentracing.StartSpanFromContextWithTracer(ctx, o.tracer, operationName, opentracing.StartTime(startTime))
 	return ctx
 }
 
 func (o *clientTracer) Finish(ctx context.Context) {
-	span := opentracing.SpanFromContext(ctx)
+	rpcSpan := opentracing.SpanFromContext(ctx)
 
 	ri := rpcinfo.GetRPCInfo(ctx)
 	st := ri.Stats()
-	// set common rpc tag
-	setCommonTag(span, st)
-	// set client connection cost tag
-	span.SetTag("conn_cost", uint64(utils.CalculateEventCost(st, stats.ClientConnStart, stats.ClientConnFinish).Milliseconds()))
 
-	span.Finish()
+	// new common rpc span
+	o.newCommonSpan(rpcSpan, st)
+	// new establish connection span
+	o.newEventSpan("establish connection", st, stats.ClientConnStart, stats.ClientConnFinish, rpcSpan.Context())
+
+	rpcSpan.FinishWithOptions(opentracing.FinishOptions{FinishTime: st.GetEvent(stats.RPCFinish).Time()})
 }
 
-// DefaultClientOption return client option with opentracing global tracer and default operation name formater.
-func DefaultClientOption() client.Option {
-	return ClientOption(opentracing.GlobalTracer(), func(ctx context.Context) string {
-		endpoint := rpcinfo.GetRPCInfo(ctx).From()
-		return endpoint.ServiceName() + "::" + endpoint.Method()
-	})
-}
-
-// ClientOption return client option with specified tracer and operation name formater.
-func ClientOption(tracer opentracing.Tracer, formOperationName func(c context.Context) string) client.Option {
+// clientOption return client option with specified tracer and operation name formater.
+func clientOption(tracer opentracing.Tracer, formOperationName func(c context.Context) string) client.Option {
 	ct := &clientTracer{}
 	ct.tracer = tracer
 	ct.formOperationName = formOperationName
 	return client.WithTracer(ct)
+}
+
+func NewDefaultClientSuite() client.Suite {
+	return &clientSuite{opentracing.GlobalTracer(), func(ctx context.Context) string {
+		endpoint := rpcinfo.GetRPCInfo(ctx).From()
+		return endpoint.ServiceName() + "::" + endpoint.Method()
+	}}
+}
+
+func NewClientSuite(tracer opentracing.Tracer, formOperationName func(c context.Context) string) client.Suite {
+	return &clientSuite{tracer, formOperationName}
+}
+
+type clientSuite struct {
+	tracer            opentracing.Tracer
+	formOperationName func(c context.Context) string
+}
+
+func (c *clientSuite) Options() []client.Option {
+	var options []client.Option
+	options = append(options, clientOption(c.tracer, c.formOperationName))
+	options = append(options, client.WithMiddleware(SpanContextInjectMW))
+	options = append(options, client.WithTransportProtocol(transport.TTHeader))
+	options = append(options, client.WithMetaHandler(transmeta.ClientTTHeaderHandler))
+	return options
 }
