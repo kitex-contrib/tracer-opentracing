@@ -19,7 +19,7 @@ import (
 
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/stats"
-	"github.com/cloudwego/kitex/pkg/utils"
+	"github.com/cloudwego/kitex/pkg/transmeta"
 	"github.com/cloudwego/kitex/server"
 	"github.com/opentracing/opentracing-go"
 )
@@ -30,39 +30,62 @@ type serverTracer struct {
 	commonTracer
 }
 
+type traceContainer struct {
+	serverTracer *serverTracer
+	span         opentracing.Span
+}
+
 func (o *serverTracer) Start(ctx context.Context) context.Context {
-	var operationName string
-	if o.formOperationName != nil {
-		operationName = o.formOperationName(ctx)
-	}
-	_, ctx = opentracing.StartSpanFromContextWithTracer(ctx, o.tracer, operationName)
+	ctx = context.WithValue(ctx, traceContainerKey, &traceContainer{serverTracer: o})
 	return ctx
 }
 
 func (o *serverTracer) Finish(ctx context.Context) {
-	span := opentracing.SpanFromContext(ctx)
+	tc, ok := ctx.Value(traceContainerKey).(*traceContainer)
+	if !ok || tc.span == nil {
+		panic("fucked")
+	}
+	rpcSpan := tc.span
 
 	ri := rpcinfo.GetRPCInfo(ctx)
 	st := ri.Stats()
-	// set common rpc tag
-	setCommonTag(span, st)
-	// set server handler cost tag
-	span.SetTag("handler_cost", uint64(utils.CalculateEventCost(st, stats.ServerHandleStart, stats.ServerHandleFinish).Milliseconds()))
-	span.Finish()
+
+	// new common rpc span
+	o.newCommonSpan(rpcSpan, st)
+	// new handler span
+	o.newEventSpan("handler", st, stats.ServerHandleStart, stats.ServerHandleFinish, rpcSpan.Context())
+
+	rpcSpan.FinishWithOptions(opentracing.FinishOptions{FinishTime: st.GetEvent(stats.RPCFinish).Time()})
 }
 
-// DefaultServerOption return server option with opentracing global tracer and default operation name formater.
-func DefaultServerOption() server.Option {
-	return ServerOption(opentracing.GlobalTracer(), func(ctx context.Context) string {
-		endpoint := rpcinfo.GetRPCInfo(ctx).To()
-		return endpoint.ServiceName() + "::" + endpoint.Method()
-	})
-}
-
-// ServerOption return server option with specified tracer and operation name formater.
-func ServerOption(tracer opentracing.Tracer, formOperationName func(c context.Context) string) server.Option {
+// serverOption return server option with specified tracer and operation name formater.
+func serverOption(tracer opentracing.Tracer, formOperationName func(c context.Context) string) server.Option {
 	st := &serverTracer{}
 	st.tracer = tracer
 	st.formOperationName = formOperationName
 	return server.WithTracer(st)
+}
+
+func NewDefaultServerSuite() server.Suite {
+	return &serverSuite{opentracing.GlobalTracer(), func(ctx context.Context) string {
+		endpoint := rpcinfo.GetRPCInfo(ctx).From()
+		return endpoint.ServiceName() + "::" + endpoint.Method()
+	}}
+}
+
+func NewServerSuite(tracer opentracing.Tracer, formOperationName func(c context.Context) string) server.Suite {
+	return &serverSuite{tracer, formOperationName}
+}
+
+type serverSuite struct {
+	tracer            opentracing.Tracer
+	formOperationName func(c context.Context) string
+}
+
+func (c *serverSuite) Options() []server.Option {
+	var options []server.Option
+	options = append(options, serverOption(c.tracer, c.formOperationName))
+	options = append(options, server.WithMiddleware(SpanContextExtractMW))
+	options = append(options, server.WithMetaHandler(transmeta.ServerTTHeaderHandler))
+	return options
 }

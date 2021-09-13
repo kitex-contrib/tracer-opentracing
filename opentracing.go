@@ -20,7 +20,6 @@ import (
 
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/stats"
-	"github.com/cloudwego/kitex/pkg/utils"
 	"github.com/opentracing/opentracing-go"
 )
 
@@ -29,10 +28,27 @@ type commonTracer struct {
 	formOperationName func(context.Context) string
 }
 
-func setCommonTag(span opentracing.Span, st rpcinfo.RPCStats) {
-	span.SetTag("read_cost", uint64(utils.CalculateEventCost(st, stats.ReadStart, stats.ReadFinish).Microseconds()))
-	span.SetTag("wait_read_cost", uint64(utils.CalculateEventCost(st, stats.WaitReadStart, stats.WaitReadFinish).Milliseconds()))
-	span.SetTag("write_cost", uint64(utils.CalculateEventCost(st, stats.WriteStart, stats.WriteFinish).Milliseconds()))
-	span.SetTag("send_size", st.SendSize())
-	span.SetTag("recv_size", st.RecvSize())
+func (c *commonTracer) newCommonSpan(span opentracing.Span, st rpcinfo.RPCStats) {
+	readSpan := c.newEventSpan("read", st, stats.ReadStart, stats.ReadFinish, span.Context())
+	readSpan.SetTag("recv_size", st.RecvSize())
+
+	c.newEventSpan("wait_read", st, stats.WaitReadStart, stats.WaitReadFinish, span.Context())
+	writeSpan := c.newEventSpan("write", st, stats.WriteStart, stats.WriteFinish, span.Context())
+	writeSpan.SetTag("send_size", st.SendSize())
+}
+
+func (c *commonTracer) newEventSpan(operationName string, st rpcinfo.RPCStats, start, end stats.Event, parentContext opentracing.SpanContext) opentracing.Span {
+	var opts []opentracing.StartSpanOption
+	event := st.GetEvent(start)
+	if event == nil {
+		return nil
+	}
+	startTime := opentracing.StartTime(event.Time())
+	opts = append(opts, opentracing.StartTime(startTime))
+	if parentContext != nil {
+		opts = append(opts, opentracing.ChildOf(parentContext))
+	}
+	span := c.tracer.StartSpan(operationName, opts...)
+	span.FinishWithOptions(opentracing.FinishOptions{FinishTime: st.GetEvent(end).Time()})
+	return span
 }
