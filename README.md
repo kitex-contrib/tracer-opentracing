@@ -5,13 +5,15 @@
 ```go
 import (
     ...
+    "github.com/cloudwego/kitex/server"
     internal_opentracing "github.com/kitex-contrib/tracer-opentracing"
     ...
 )
 
 func main() {
     ...
-    svr := echo.NewServer(new(EchoImpl), internal_opentracing.DefaultServerOption())
+    tracer := internal_opentracing.NewDefaultServerSuite()
+    svr := echo.NewServer(new(EchoImpl), server.WithSuite(tracer))
     ...
 }
 ```
@@ -21,13 +23,15 @@ func main() {
 ```go
 import (
     ...
+    "github.com/cloudwego/kitex/client"
     internal_opentracing "github.com/kitex-contrib/tracer-opentracing"
     ...
 )
 
 func main() {
     ...
-    client, err := echo.NewClient("echo", internal_opentracing.DefaultClientOption())
+    tracer := internal_opentracing.NewDefaultClientSuite()
+    client, err := echo.NewClient("echo", client.WithSuite(tracer))
 	if err != nil {
 		log.Fatal(err)
 	}
