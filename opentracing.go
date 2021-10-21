@@ -30,11 +30,15 @@ type commonTracer struct {
 
 func (c *commonTracer) newCommonSpan(span opentracing.Span, st rpcinfo.RPCStats) {
 	readSpan := c.newEventSpan("read", st, stats.ReadStart, stats.ReadFinish, span.Context())
-	readSpan.SetTag("recv_size", st.RecvSize())
+	if readSpan != nil {
+		readSpan.SetTag("recv_size", st.RecvSize())
+	}
 
 	c.newEventSpan("wait_read", st, stats.WaitReadStart, stats.WaitReadFinish, span.Context())
 	writeSpan := c.newEventSpan("write", st, stats.WriteStart, stats.WriteFinish, span.Context())
-	writeSpan.SetTag("send_size", st.SendSize())
+	if writeSpan != nil {
+		writeSpan.SetTag("send_size", st.SendSize())
+	}
 }
 
 func (c *commonTracer) newEventSpan(operationName string, st rpcinfo.RPCStats, start, end stats.Event, parentContext opentracing.SpanContext) opentracing.Span {

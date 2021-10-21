@@ -43,7 +43,7 @@ func (o *serverTracer) Start(ctx context.Context) context.Context {
 func (o *serverTracer) Finish(ctx context.Context) {
 	tc, ok := ctx.Value(traceContainerKey).(*traceContainer)
 	if !ok || tc.span == nil {
-		panic("fucked")
+		panic("get tracer container failed")
 	}
 	rpcSpan := tc.span
 
