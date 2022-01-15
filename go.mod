@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/bytedance/gopkg v0.0.0-20210716082555-acbf5a2aa7e2
 	github.com/cloudwego/kitex v0.0.4
+	github.com/go-redis/redis/v8 v8.11.4 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
