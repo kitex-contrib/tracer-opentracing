@@ -43,13 +43,13 @@ type jaegerHook struct {
 }
 
 // NewJaegerHook return jaegerHook
-func NewJaegerHook(tracer opentracing.Tracer) *jaegerHook {
+func NewJaegerHook(tracer opentracing.Tracer) redis.Hook {
 	return &jaegerHook{
 		tracer: tracer,
 	}
 }
 
-//BeforeProcess redis before execute action do something
+// BeforeProcess redis before execute action do something
 func (jh *jaegerHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
 	if jh.tracer == nil {
 		return ctx, nil
@@ -60,7 +60,7 @@ func (jh *jaegerHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (conte
 	return ctx, nil
 }
 
-//AfterProcess redis after execute action do something
+// AfterProcess redis after execute action do something
 func (jh *jaegerHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
 	if jh.tracer == nil {
 		return nil
@@ -117,11 +117,9 @@ func (jh *jaegerHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmd
 		span.LogFields(tracerLog.Object(jh.getPipeLineLogKey(logCmdArgs, idx), cmd.Args()))
 		span.LogFields(tracerLog.String(jh.getPipeLineLogKey(logCmdResult, idx), cmd.String()))
 	}
-	if !hasErr {
-		return nil
+	if hasErr {
+		span.SetTag(string(ext.Error), true)
 	}
-	span.SetTag(string(ext.Error), true)
-
 	return nil
 }
 
@@ -129,21 +127,10 @@ func (jh *jaegerHook) getPipeLineLogKey(logField string, idx int) string {
 	return logField + "-" + strconv.Itoa(idx)
 }
 
-// redisError interface
-type redisError interface {
-	error
-
-	// RedisError is a no-op function but
-	// serves to distinguish types that are Redis
-	// errors from ordinary errors: a type is a
-	// Redis error if it has a RedisError method.
-	RedisError()
-}
-
 func isRedisError(err error) bool {
 	if err == redis.Nil {
 		return false
 	}
-	_, ok := err.(redisError)
+	_, ok := err.(redis.Error)
 	return ok
 }
