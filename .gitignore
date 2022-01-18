@@ -15,3 +15,5 @@
 # vendor/
 # IDE
 .vscode
+cover.out
+cover.html
