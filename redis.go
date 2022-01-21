@@ -37,32 +37,32 @@ const (
 	cmdStart contextKey = iota
 )
 
-// jaegerHook is go-redis jaeger hook
-type jaegerHook struct {
+// redisHook implements go-redis hook
+type redisHook struct {
 	tracer opentracing.Tracer
 }
 
-// NewJaegerHook return jaegerHook
-func NewJaegerHook(tracer opentracing.Tracer) redis.Hook {
-	return &jaegerHook{
+// NewRedisHook return redis.Hook
+func NewRedisHook(tracer opentracing.Tracer) redis.Hook {
+	return &redisHook{
 		tracer: tracer,
 	}
 }
 
 // BeforeProcess redis before execute action do something
-func (jh *jaegerHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
-	if jh.tracer == nil {
+func (rh *redisHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
+	if rh.tracer == nil {
 		return ctx, nil
 	}
-	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, jh.tracer, operationRedis+cmd.Name())
+	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+cmd.Name())
 
 	ctx = context.WithValue(ctx, cmdStart, span)
 	return ctx, nil
 }
 
 // AfterProcess redis after execute action do something
-func (jh *jaegerHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
-	if jh.tracer == nil {
+func (rh *redisHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
+	if rh.tracer == nil {
 		return nil
 	}
 	span, ok := ctx.Value(cmdStart).(opentracing.Span)
@@ -84,12 +84,12 @@ func (jh *jaegerHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
 }
 
 // BeforeProcessPipeline before command process handle
-func (jh *jaegerHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cmder) (context.Context, error) {
-	if jh.tracer == nil {
+func (rh *redisHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cmder) (context.Context, error) {
+	if rh.tracer == nil {
 		return ctx, nil
 	}
 
-	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, jh.tracer, operationRedis+"pipeline")
+	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+"pipeline")
 
 	ctx = context.WithValue(ctx, cmdStart, span)
 
@@ -97,8 +97,8 @@ func (jh *jaegerHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cm
 }
 
 // AfterProcessPipeline after command process handle
-func (jh *jaegerHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmder) error {
-	if jh.tracer == nil {
+func (rh *redisHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmder) error {
+	if rh.tracer == nil {
 		return nil
 	}
 
@@ -113,9 +113,9 @@ func (jh *jaegerHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmd
 		if err := cmd.Err(); isRedisError(err) {
 			hasErr = true
 		}
-		span.LogFields(tracerLog.String(jh.getPipeLineLogKey(logCmdName, idx), cmd.Name()))
-		span.LogFields(tracerLog.Object(jh.getPipeLineLogKey(logCmdArgs, idx), cmd.Args()))
-		span.LogFields(tracerLog.String(jh.getPipeLineLogKey(logCmdResult, idx), cmd.String()))
+		span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdName, idx), cmd.Name()))
+		span.LogFields(tracerLog.Object(rh.getPipeLineLogKey(logCmdArgs, idx), cmd.Args()))
+		span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdResult, idx), cmd.String()))
 	}
 	if hasErr {
 		span.SetTag(string(ext.Error), true)
@@ -123,7 +123,7 @@ func (jh *jaegerHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmd
 	return nil
 }
 
-func (jh *jaegerHook) getPipeLineLogKey(logField string, idx int) string {
+func (rh *redisHook) getPipeLineLogKey(logField string, idx int) string {
 	return logField + "-" + strconv.Itoa(idx)
 }
 

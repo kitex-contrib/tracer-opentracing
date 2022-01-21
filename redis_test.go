@@ -25,19 +25,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewJaegerHook(t *testing.T) {
-	convey.Convey("TestNewJaegerHook", t, func() {
+func TestNewRedisHook(t *testing.T) {
+	convey.Convey("TestNewRedisHook", t, func() {
 		convey.Convey("success", func() {
-			_ = NewJaegerHook(mocktracer.New())
+			_ = NewRedisHook(mocktracer.New())
 		})
 	})
 }
 
-func Test_jaegerHook_BeforeProcess(t *testing.T) {
-	convey.Convey("Test_jaegerHook_BeforeProcess", t, func() {
+func Test_redisHook_BeforeProcess(t *testing.T) {
+	convey.Convey("Test_redisHook_BeforeProcess", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
-			jh := NewJaegerHook(nil)
+			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
 			_, err := jh.BeforeProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -45,7 +45,7 @@ func Test_jaegerHook_BeforeProcess(t *testing.T) {
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			_, err := jh.BeforeProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -54,11 +54,11 @@ func Test_jaegerHook_BeforeProcess(t *testing.T) {
 	})
 }
 
-func Test_jaegerHook_AfterProcess(t *testing.T) {
-	convey.Convey("Test_jaegerHook_AfterProcess", t, func() {
+func Test_redisHook_AfterProcess(t *testing.T) {
+	convey.Convey("Test_redisHook_AfterProcess", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
-			jh := NewJaegerHook(nil)
+			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
 			err := jh.AfterProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -66,7 +66,7 @@ func Test_jaegerHook_AfterProcess(t *testing.T) {
 		convey.Convey("extract span from ctx nil", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			err := jh.AfterProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -75,7 +75,7 @@ func Test_jaegerHook_AfterProcess(t *testing.T) {
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			ctx, err := jh.BeforeProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -91,7 +91,7 @@ func Test_jaegerHook_AfterProcess(t *testing.T) {
 
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewBoolResult(false, redis.ErrClosed)
 			ctx, err := jh.BeforeProcess(ctx, cmd)
 			assert.Equal(t, err, nil)
@@ -102,11 +102,11 @@ func Test_jaegerHook_AfterProcess(t *testing.T) {
 	})
 }
 
-func Test_jaegerHook_BeforeProcessPipeline(t *testing.T) {
-	convey.Convey("Test_jaegerHook_BeforeProcessPipeline", t, func() {
+func Test_redisHook_BeforeProcessPipeline(t *testing.T) {
+	convey.Convey("Test_redisHook_BeforeProcessPipeline", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
-			jh := NewJaegerHook(nil)
+			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
 			_, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -114,7 +114,7 @@ func Test_jaegerHook_BeforeProcessPipeline(t *testing.T) {
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			_, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -123,11 +123,11 @@ func Test_jaegerHook_BeforeProcessPipeline(t *testing.T) {
 	})
 }
 
-func Test_jaegerHook_AfterProcessPipeline(t *testing.T) {
-	convey.Convey("Test_jaegerHook_AfterProcessPipeline", t, func() {
+func Test_redisHook_AfterProcessPipeline(t *testing.T) {
+	convey.Convey("Test_redisHook_AfterProcessPipeline", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
-			jh := NewJaegerHook(nil)
+			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
 			err := jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -135,7 +135,7 @@ func Test_jaegerHook_AfterProcessPipeline(t *testing.T) {
 		convey.Convey("extract span from ctx nil", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			err := jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -144,7 +144,7 @@ func Test_jaegerHook_AfterProcessPipeline(t *testing.T) {
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
 			ctx, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -160,7 +160,7 @@ func Test_jaegerHook_AfterProcessPipeline(t *testing.T) {
 
 			ctx := context.Background()
 			tracer := mocktracer.New()
-			jh := NewJaegerHook(tracer)
+			jh := NewRedisHook(tracer)
 			cmd := redis.NewBoolResult(false, redis.ErrClosed)
 			ctx, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
 			assert.Equal(t, err, nil)
@@ -171,10 +171,10 @@ func Test_jaegerHook_AfterProcessPipeline(t *testing.T) {
 	})
 }
 
-func Test_jaegerHook_getPipeLineLogKey(t *testing.T) {
-	convey.Convey("Test_jaegerHook_getPipeLineLogKey", t, func() {
+func Test_redisHook_getPipeLineLogKey(t *testing.T) {
+	convey.Convey("Test_redisHook_getPipeLineLogKey", t, func() {
 		convey.Convey("success", func() {
-			assert.Equal(t, (&jaegerHook{}).getPipeLineLogKey("a", 1), "a-1")
+			assert.Equal(t, (&redisHook{}).getPipeLineLogKey("a", 1), "a-1")
 		})
 	})
 }
