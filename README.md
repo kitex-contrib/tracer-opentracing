@@ -41,3 +41,23 @@ func main() {
 Just like server, `DefaultClientOption` will use opentracing global tracer as tracer, and `{Service Name}::{Method Name}` as operation name. You can customize both by `ClientOption`.
 ## Example
 [Executable Example](https://github.com/cloudwego/kitex-examples/tree/main/tracer)
+
+## Supported Components
+## Redis
+You need to add the hook provided by tracer-opentracing to instrument Redis client:
+```go
+import (
+    ...
+    "github.com/go-redis/redis/v8"
+    internal_opentracing "github.com/kitex-contrib/tracer-opentracing"
+    ...
+)
+
+func main() {
+    ...
+    rdb := redis.NewClient(&redis.Options{...})
+    rdb.AddHook(internal_opentracing.NewTracingHook())
+    ...
+}
+```
+
