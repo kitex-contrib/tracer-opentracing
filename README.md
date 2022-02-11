@@ -18,6 +18,7 @@ func main() {
 }
 ```
 `DefaultServerOption` will use opentracing global tracer as tracer, and `{Service Name}::{Method Name}` as operation name. You can customize both by `ServerOption`.
+Make sure opentracing global tracer has been initialized (See [Example](README.md#example) below).
 
 ## Client usage
 ```go
@@ -39,6 +40,7 @@ func main() {
 }
 ```
 Just like server, `DefaultClientOption` will use opentracing global tracer as tracer, and `{Service Name}::{Method Name}` as operation name. You can customize both by `ClientOption`.
+Make sure opentracing global tracer has been initialized (See [Example](README.md#example) below).
 ## Example
 [Executable Example](https://github.com/cloudwego/kitex-examples/tree/main/tracer)
 
