@@ -17,6 +17,7 @@ package opentracing
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -28,7 +29,8 @@ import (
 )
 
 const (
-	SpanContextKey = "JaegerSpanContext"
+	// SpanContextKey transit key, transited by HTTP2 will convert case, so use uppercase
+	SpanContextKey = "JAEGERSPANCONTEXT"
 )
 
 type opentracingCtx int
@@ -42,21 +44,21 @@ func SpanContextInjectMW(next endpoint.Endpoint) endpoint.Endpoint {
 		span := opentracing.SpanFromContext(ctx)
 		var b bytes.Buffer
 		span.Tracer().Inject(span.Context(), opentracing.Binary, &b)
-		ctx = metainfo.WithValue(ctx, SpanContextKey, b.String())
+		ctx = metainfo.WithValue(ctx, SpanContextKey, base64.StdEncoding.EncodeToString(b.Bytes()))
 		return next(ctx, req, resp)
 	}
 }
 
 func SpanContextExtractMW(next endpoint.Endpoint) endpoint.Endpoint {
-	return func(ctx context.Context, req, resp interface{}) (err error) {
+	return func(ctx context.Context, req, resp interface{}) error {
 		tc, ok := ctx.Value(traceContainerKey).(*traceContainer)
 		if !ok {
 			return errors.New("no opentracing tracer found in context")
 		}
-		serverTracer := tc.serverTracer
+		svrTracer := tc.serverTracer
 		var operationName string
-		if serverTracer.formOperationName != nil {
-			operationName = serverTracer.formOperationName(ctx)
+		if svrTracer.formOperationName != nil {
+			operationName = svrTracer.formOperationName(ctx)
 		}
 
 		var opts []opentracing.StartSpanOption
@@ -66,14 +68,18 @@ func SpanContextExtractMW(next endpoint.Endpoint) endpoint.Endpoint {
 		opts = append(opts, opentracing.StartTime(startTime))
 
 		if sck, ok := metainfo.GetValue(ctx, SpanContextKey); ok {
-			parentContext, err := serverTracer.tracer.Extract(opentracing.Binary, bytes.NewBuffer([]byte(sck)))
+			binaryBytes, err := base64.StdEncoding.DecodeString(sck)
+			if err != nil {
+				return fmt.Errorf("decode opentracing binary failed, %w", err)
+			}
+			parentContext, err := svrTracer.tracer.Extract(opentracing.Binary, bytes.NewBuffer(binaryBytes))
 			if err != nil {
 				return fmt.Errorf("extract SpanContext failed, %w", err)
 			}
 			opts = append(opts, opentracing.ChildOf(parentContext))
 		}
 
-		rpcSpan, ctx := opentracing.StartSpanFromContextWithTracer(ctx, serverTracer.tracer, operationName, opts...)
+		rpcSpan, ctx := opentracing.StartSpanFromContextWithTracer(ctx, svrTracer.tracer, operationName, opts...)
 		tc.span = rpcSpan
 		return next(ctx, req, resp)
 	}
