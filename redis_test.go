@@ -16,11 +16,12 @@ package opentracing
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/agiledragon/gomonkey/v2"
-	"github.com/go-redis/redis/v8"
 	"github.com/opentracing/opentracing-go/mocktracer"
+	"github.com/redis/go-redis/v9"
 	"github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,54 +34,26 @@ func TestNewRedisHook(t *testing.T) {
 	})
 }
 
-func Test_redisHook_BeforeProcess(t *testing.T) {
-	convey.Convey("Test_redisHook_BeforeProcess", t, func() {
+func Test_redisHook_ProcessHook(t *testing.T) {
+	convey.Convey("Test_redisHook_ProcessHook", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
 			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
-			_, err := jh.BeforeProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
+			hook := jh.ProcessHook(func(ctx context.Context, cmd redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, cmd), nil)
 		})
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
 			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
-			_, err := jh.BeforeProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
-			assert.Len(t, tracer.FinishedSpans(), 0)
-		})
-	})
-}
-
-func Test_redisHook_AfterProcess(t *testing.T) {
-	convey.Convey("Test_redisHook_AfterProcess", t, func() {
-		convey.Convey("Tracer nil", func() {
-			ctx := context.Background()
-			jh := NewRedisHook(nil)
-			cmd := redis.NewStringCmd(ctx, "get")
-			err := jh.AfterProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
-		})
-		convey.Convey("extract span from ctx nil", func() {
-			ctx := context.Background()
-			tracer := mocktracer.New()
-			jh := NewRedisHook(tracer)
-			cmd := redis.NewStringCmd(ctx, "get")
-			err := jh.AfterProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
-			assert.Len(t, tracer.FinishedSpans(), 0)
-		})
-		convey.Convey("success", func() {
-			ctx := context.Background()
-			tracer := mocktracer.New()
-			jh := NewRedisHook(tracer)
-			cmd := redis.NewStringCmd(ctx, "get")
-			ctx, err := jh.BeforeProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
-			err = jh.AfterProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
+			hook := jh.ProcessHook(func(ctx context.Context, cmd redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, cmd), nil)
 			assert.Len(t, tracer.FinishedSpans(), 1)
 		})
 		convey.Convey("success and cmd err", func() {
@@ -93,63 +66,35 @@ func Test_redisHook_AfterProcess(t *testing.T) {
 			tracer := mocktracer.New()
 			jh := NewRedisHook(tracer)
 			cmd := redis.NewBoolResult(false, redis.ErrClosed)
-			ctx, err := jh.BeforeProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
-			err = jh.AfterProcess(ctx, cmd)
-			assert.Equal(t, err, nil)
+			hook := jh.ProcessHook(func(ctx context.Context, cmd redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, cmd), nil)
 			assert.Len(t, tracer.FinishedSpans(), 1)
 		})
 	})
 }
 
-func Test_redisHook_BeforeProcessPipeline(t *testing.T) {
-	convey.Convey("Test_redisHook_BeforeProcessPipeline", t, func() {
+func Test_redisHook_ProcessPipelineHook(t *testing.T) {
+	convey.Convey("Test_redisHook_ProcessPipelineHook", t, func() {
 		convey.Convey("Tracer nil", func() {
 			ctx := context.Background()
 			jh := NewRedisHook(nil)
 			cmd := redis.NewStringCmd(ctx, "get")
-			_, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
+			hook := jh.ProcessPipelineHook(func(ctx context.Context, cmds []redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, []redis.Cmder{cmd}), nil)
 		})
 		convey.Convey("success", func() {
 			ctx := context.Background()
 			tracer := mocktracer.New()
 			jh := NewRedisHook(tracer)
 			cmd := redis.NewStringCmd(ctx, "get")
-			_, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
-			assert.Len(t, tracer.FinishedSpans(), 0)
-		})
-	})
-}
-
-func Test_redisHook_AfterProcessPipeline(t *testing.T) {
-	convey.Convey("Test_redisHook_AfterProcessPipeline", t, func() {
-		convey.Convey("Tracer nil", func() {
-			ctx := context.Background()
-			jh := NewRedisHook(nil)
-			cmd := redis.NewStringCmd(ctx, "get")
-			err := jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
-		})
-		convey.Convey("extract span from ctx nil", func() {
-			ctx := context.Background()
-			tracer := mocktracer.New()
-			jh := NewRedisHook(tracer)
-			cmd := redis.NewStringCmd(ctx, "get")
-			err := jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
-			assert.Len(t, tracer.FinishedSpans(), 0)
-		})
-		convey.Convey("success", func() {
-			ctx := context.Background()
-			tracer := mocktracer.New()
-			jh := NewRedisHook(tracer)
-			cmd := redis.NewStringCmd(ctx, "get")
-			ctx, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
-			err = jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
-			assert.Equal(t, err, nil)
+			hook := jh.ProcessPipelineHook(func(ctx context.Context, cmds []redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, []redis.Cmder{cmd}), nil)
 			assert.Len(t, tracer.FinishedSpans(), 1)
 		})
 		convey.Convey("success and cmd err", func() {
@@ -162,9 +107,53 @@ func Test_redisHook_AfterProcessPipeline(t *testing.T) {
 			tracer := mocktracer.New()
 			jh := NewRedisHook(tracer)
 			cmd := redis.NewBoolResult(false, redis.ErrClosed)
-			ctx, err := jh.BeforeProcessPipeline(ctx, []redis.Cmder{cmd})
+			hook := jh.ProcessPipelineHook(func(ctx context.Context, cmds []redis.Cmder) error {
+				return nil
+			})
+			assert.Equal(t, hook(ctx, []redis.Cmder{cmd}), nil)
+			assert.Len(t, tracer.FinishedSpans(), 1)
+		})
+	})
+}
+
+func Test_redisHook_DialHook(t *testing.T) {
+	convey.Convey("Test_redisHook_DialHook", t, func() {
+		convey.Convey("Tracer nil", func() {
+			ctx := context.Background()
+			jh := NewRedisHook(nil)
+			hook := jh.DialHook(func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, nil
+			})
+			conn, err := hook(ctx, "", "")
+			assert.Equal(t, conn, nil)
 			assert.Equal(t, err, nil)
-			err = jh.AfterProcessPipeline(ctx, []redis.Cmder{cmd})
+		})
+		convey.Convey("success", func() {
+			ctx := context.Background()
+			tracer := mocktracer.New()
+			jh := NewRedisHook(tracer)
+			hook := jh.DialHook(func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, nil
+			})
+			conn, err := hook(ctx, "", "")
+			assert.Equal(t, conn, nil)
+			assert.Equal(t, err, nil)
+			assert.Len(t, tracer.FinishedSpans(), 1)
+		})
+		convey.Convey("success and dial err", func() {
+			patche := gomonkey.ApplyFuncSeq(isRedisError, []gomonkey.OutputCell{
+				{Values: gomonkey.Params{true}},
+			})
+			defer patche.Reset()
+
+			ctx := context.Background()
+			tracer := mocktracer.New()
+			jh := NewRedisHook(tracer)
+			hook := jh.DialHook(func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return nil, nil
+			})
+			conn, err := hook(ctx, "", "")
+			assert.Equal(t, conn, nil)
 			assert.Equal(t, err, nil)
 			assert.Len(t, tracer.FinishedSpans(), 1)
 		})

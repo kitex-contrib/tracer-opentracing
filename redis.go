@@ -16,12 +16,13 @@ package opentracing
 
 import (
 	"context"
+	"net"
 	"strconv"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	tracerLog "github.com/opentracing/opentracing-go/log"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -29,12 +30,8 @@ const (
 	logCmdName     = "command"
 	logCmdArgs     = "args"
 	logCmdResult   = "result"
-)
-
-type contextKey int
-
-const (
-	cmdStart contextKey = iota
+	redisPipeline  = "pipeline"
+	redisDial      = "dial"
 )
 
 // redisHook implements go-redis hook
@@ -49,78 +46,64 @@ func NewRedisHook(tracer opentracing.Tracer) redis.Hook {
 	}
 }
 
-// BeforeProcess redis before execute action do something
-func (rh *redisHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
-	if rh.tracer == nil {
-		return ctx, nil
-	}
-	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+cmd.Name())
-
-	ctx = context.WithValue(ctx, cmdStart, span)
-	return ctx, nil
-}
-
-// AfterProcess redis after execute action do something
-func (rh *redisHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
-	if rh.tracer == nil {
-		return nil
-	}
-	span, ok := ctx.Value(cmdStart).(opentracing.Span)
-	if !ok {
-		return nil
-	}
-	defer span.Finish()
-
-	span.LogFields(tracerLog.String(logCmdName, cmd.Name()))
-	span.LogFields(tracerLog.Object(logCmdArgs, cmd.Args()))
-	span.LogFields(tracerLog.Object(logCmdResult, cmd.String()))
-
-	if err := cmd.Err(); isRedisError(err) {
-		span.LogFields(tracerLog.Error(err))
-		span.SetTag(string(ext.Error), true)
-	}
-
-	return nil
-}
-
-// BeforeProcessPipeline before command process handle
-func (rh *redisHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cmder) (context.Context, error) {
-	if rh.tracer == nil {
-		return ctx, nil
-	}
-
-	span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+"pipeline")
-
-	ctx = context.WithValue(ctx, cmdStart, span)
-
-	return ctx, nil
-}
-
-// AfterProcessPipeline after command process handle
-func (rh *redisHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmder) error {
-	if rh.tracer == nil {
-		return nil
-	}
-
-	span, ok := ctx.Value(cmdStart).(opentracing.Span)
-	if !ok {
-		return nil
-	}
-	defer span.Finish()
-
-	hasErr := false
-	for idx, cmd := range cmds {
-		if err := cmd.Err(); isRedisError(err) {
-			hasErr = true
+func (rh *redisHook) DialHook(hook redis.DialHook) redis.DialHook {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if rh.tracer == nil {
+			return hook(ctx, network, addr)
 		}
-		span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdName, idx), cmd.Name()))
-		span.LogFields(tracerLog.Object(rh.getPipeLineLogKey(logCmdArgs, idx), cmd.Args()))
-		span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdResult, idx), cmd.String()))
+		span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+redisDial)
+		conn, err := hook(ctx, network, addr)
+		defer span.Finish()
+
+		if isRedisError(err) {
+			span.LogFields(tracerLog.Error(err))
+			span.SetTag(string(ext.Error), true)
+		}
+
+		return conn, err
 	}
-	if hasErr {
-		span.SetTag(string(ext.Error), true)
+}
+
+func (rh *redisHook) ProcessHook(hook redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if rh.tracer == nil {
+			return hook(ctx, cmd)
+		}
+		span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+cmd.Name())
+		err := hook(ctx, cmd)
+		defer span.Finish()
+
+		span.LogFields(tracerLog.String(logCmdName, cmd.Name()))
+		span.LogFields(tracerLog.Object(logCmdArgs, cmd.Args()))
+		span.LogFields(tracerLog.Object(logCmdResult, cmd.String()))
+		if isRedisError(err) {
+			span.LogFields(tracerLog.Error(err))
+			span.SetTag(string(ext.Error), true)
+		}
+
+		return err
 	}
-	return nil
+}
+
+func (rh *redisHook) ProcessPipelineHook(hook redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		if rh.tracer == nil {
+			return hook(ctx, cmds)
+		}
+		span, ctx := opentracing.StartSpanFromContextWithTracer(ctx, rh.tracer, operationRedis+redisPipeline)
+		err := hook(ctx, cmds)
+		defer span.Finish()
+		for idx, cmd := range cmds {
+			span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdName, idx), cmd.Name()))
+			span.LogFields(tracerLog.Object(rh.getPipeLineLogKey(logCmdArgs, idx), cmd.Args()))
+			span.LogFields(tracerLog.String(rh.getPipeLineLogKey(logCmdResult, idx), cmd.String()))
+		}
+		if isRedisError(err) {
+			span.LogFields(tracerLog.Error(err))
+			span.SetTag(string(ext.Error), true)
+		}
+		return err
+	}
 }
 
 func (rh *redisHook) getPipeLineLogKey(logField string, idx int) string {
