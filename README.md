@@ -1,3 +1,8 @@
+# Archived
+Since [Opentracing](https://github.com/opentracing/opentracing-go) is archived by the owner on May 24, 2023, we will not continue to maintain this project.
+
+Please Use [OpenTemeletry](https://github.com/kitex-contrib/obs-opentelemetry) instead.
+
 # opentracing
 [Opentracing](https://github.com/opentracing/opentracing-go) tracer for [Kitex](https://github.com/cloudwego/kitex)
 
